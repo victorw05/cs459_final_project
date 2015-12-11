@@ -74,7 +74,7 @@ int _current_width = WIDTH;
 
 float _current_fov = 75.0;
 
-bool _render_raw_mesh = true;
+bool _render_brother_blender = true;
 
 typedef struct {
 	float x;
@@ -108,7 +108,10 @@ typedef struct {
 
 SurFaceMesh * surfmesh;
 
-RawMesh * triangular_mesh;
+RawMesh * brother_blender_mesh;
+RawMesh * blender_monkey_mesh;
+RawMesh * room_walls_mesh;
+RawMesh * scene_mesh;
 
 bool fullscreen = false;
 bool mouseDown = false;
@@ -144,9 +147,9 @@ void myCreateMenu() {
 }
 
 bool glInit() {
-	glClearColor(0.93f, 0.93f, 0.93f, 0.0f);
+	glClearColor(0.66f, 0.66f, 0.66f, 0.66f);
 	glEnable(GL_DEPTH_TEST);
-	glDepthFunc(GL_LEQUAL);
+	//glDepthFunc(GL_LEQUAL);
 	glClearDepth(1.0f);
 	return true;
 }
@@ -245,7 +248,6 @@ void mouseMotion(int x, int y) {
 
 int readPolygonMesh(const char* file) {
 
-
 	int num, n, m;
 	int a, b, c, d;
 	float x, y, z;
@@ -283,7 +285,7 @@ int readPolygonMesh(const char* file) {
 	return 0;
 }
 
-int readRawMesh(const char* file) {
+int readRawMesh(const char* file, RawMesh** triangular_mesh) {
 	int count;
 	float x, y, z, x1, y1, z1, x2, y2, z2;
 	char line[256];
@@ -297,24 +299,23 @@ int readRawMesh(const char* file) {
 			break;
 	}
 	fscanf(fin, "%d\n", &count);
-	triangular_mesh = (RawMesh*) malloc(sizeof(RawMesh));
-	triangular_mesh->count = count;
+	*triangular_mesh = (RawMesh*) malloc(sizeof(RawMesh));
+	(*triangular_mesh)->count = count;
 
-	triangular_mesh->list = (TRIANGLE*) malloc(sizeof(TRIANGLE) * count);
+	(*triangular_mesh)->list = (TRIANGLE*) malloc(sizeof(TRIANGLE) * count);
 
 	for (int n = 0; n < count; n++) {
 		fscanf(fin, "%f %f %f %f %f %f %f %f %f\n", &x, &y, &z, &x1, &y1, &z1,
 				&x2, &y2, &z2);
-		triangular_mesh->list[n].p1.x = x;
-		triangular_mesh->list[n].p1.y = y;
-		triangular_mesh->list[n].p1.z = z;
-		triangular_mesh->list[n].p2.x = x1;
-		triangular_mesh->list[n].p2.y = y1;
-		triangular_mesh->list[n].p2.z = z1;
-		triangular_mesh->list[n].p3.x = x2;
-		triangular_mesh->list[n].p3.y = y2;
-		triangular_mesh->list[n].p3.z = z2;
-
+		(*triangular_mesh)->list[n].p1.x = x;
+		(*triangular_mesh)->list[n].p1.y = y;
+		(*triangular_mesh)->list[n].p1.z = z;
+		(*triangular_mesh)->list[n].p2.x = x1;
+		(*triangular_mesh)->list[n].p2.y = y1;
+		(*triangular_mesh)->list[n].p2.z = z1;
+		(*triangular_mesh)->list[n].p3.x = x2;
+		(*triangular_mesh)->list[n].p3.y = y2;
+		(*triangular_mesh)->list[n].p3.z = z2;
 	}
 
 	fclose(fin);
@@ -336,15 +337,15 @@ void myMenu(int value) {
 			free(surfmesh->vertex);
 			free(surfmesh);
 			readPolygonMesh("inputmesh.off");
-			_render_raw_mesh = false;
+			_render_brother_blender = false;
 		} else if (value == MESH_SAMPLE) {
 			free(surfmesh->face);
 			free(surfmesh->vertex);
 			free(surfmesh);
 			readPolygonMesh("inputmesh_sample.off");
-			_render_raw_mesh = false;
+			_render_brother_blender = false;
 		} else {
-			_render_raw_mesh = true;
+			_render_brother_blender = true;
 		}
 	}
 }
@@ -375,6 +376,26 @@ void drawRawMeshWithoutColor(RawMesh *mesh) {
 	}
 }
 
+void setUpFaceNormal(FLTVECT p1, FLTVECT p2, FLTVECT p3) {
+	GLfloat normal[3];
+	GLfloat v1[3];
+	GLfloat v2[3];
+	v1[0] = p2.x - p1.x;
+	v1[1] = p2.y - p1.y;
+	v1[2] = p2.z - p1.z;
+	v2[0] = p3.x - p1.x;
+	v2[1] = p3.y - p1.y;
+	v2[2] = p3.z - p1.z;
+	normal[0] = v1[1] * v2[2] - v1[2] * v2[1];
+	normal[1] = v1[2] * v2[0] - v2[2] * v1[0];
+	normal[2] = v1[0] * v2[1] - v1[1] * v2[0];
+	glNormal3fv(normal);
+}
+
+void setUpFaceNormal(TRIANGLE triangle) {
+	setUpFaceNormal(triangle.p1, triangle.p2, triangle.p3);
+}
+
 void drawMesh(SurFaceMesh *surfmesh) {
 	int numberOfColors = 8;
 	for (int i = 0; i < surfmesh->nf; i++) {
@@ -395,6 +416,7 @@ void drawMesh(SurFaceMesh *surfmesh) {
 		} else if (i % numberOfColors == 7) {
 			glColor3f(0.0, 0.0, 0.0);
 		}
+		setUpFaceNormal(surfmesh->vertex[surfmesh->face[i].a], surfmesh->vertex[surfmesh->face[i].b], surfmesh->vertex[surfmesh->face[i].c]);
 		glBegin(GL_TRIANGLES);
 		glVertex3f(surfmesh->vertex[surfmesh->face[i].a].x,
 				surfmesh->vertex[surfmesh->face[i].a].y,
@@ -409,14 +431,16 @@ void drawMesh(SurFaceMesh *surfmesh) {
 	}
 }
 
-void drawRawMesh(RawMesh * mesh) {
+void drawRawMesh(RawMesh * mesh, float* rgb) {
 	float currentColor = 0.0;
 	for (int i = 0; i < mesh->count; i++) {
 		if (currentColor >= 1.0) {
 			currentColor = 0.0;
 		}
-		glColor3f(currentColor, currentColor - currentColor / 6.0, 0);
+		//glColor3f(currentColor, currentColor - currentColor / 6.0, 0);
 		currentColor += 0.05;
+		glColor3f(rgb[0], rgb[1], rgb[2]);
+		setUpFaceNormal(mesh->list[i]);
 		glBegin(GL_TRIANGLES);
 		glVertex3f(mesh->list[i].p1.x, mesh->list[i].p1.y, mesh->list[i].p1.z);
 		glVertex3f(mesh->list[i].p2.x, mesh->list[i].p2.y, mesh->list[i].p2.z);
@@ -425,43 +449,146 @@ void drawRawMesh(RawMesh * mesh) {
 	}
 }
 
+void drawSampleMesh(bool withColor) {
+	glPushMatrix();
+	GLfloat emission[4] = {0.0, 0.0, 0.0, 1.0};
+	GLfloat ambient[4] = {0.3, 0.0, 0.0, 1.0};
+	GLfloat diffuse[4] = {0.0, 0.4, 0.0, 1.0};
+	GLfloat shininess[4] = {0.5, 0.5, 0.5, 1.0};
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
+	glScalef(0.10, 0.10, 0.10);
+	if (withColor) {
+		drawMesh(surfmesh);
+	} else {
+		drawMeshWithoutColor(surfmesh);
+	}
+	glPopMatrix();
+}
+
+void drawBrotherBlender(bool withColor) {
+	glPushMatrix();
+	GLfloat emission[4] = {1.0, 1.0, 1.0, 1.0};
+	GLfloat ambient[4] = {1.0, 1.0, 1.0, 1.0};
+	GLfloat diffuse[4] = {1.0, 1.0, 1.0, 1.0};
+	GLfloat shininess[4] = {1.0, 1.0, 1.0, 1.0};
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 15.0);
+	if (withColor) {
+		float rgb[3] = {0.1, 0.1, 0.1};
+		drawRawMesh(brother_blender_mesh, (float*) rgb);
+	} else {
+		drawRawMeshWithoutColor(brother_blender_mesh);
+	}
+	glPopMatrix();
+}
+
+void drawBlenderMonkey(bool withColor) {
+	glPushMatrix();
+	GLfloat emission[4] = {0.0, 0.0, 0.0, 1.0};
+	GLfloat ambient[4] = {0.0, 0.0, 0.0, 1.0};
+	GLfloat diffuse[4] = {0.0, 0.0, 0.0, 1.0};
+	GLfloat shininess[4] = {0.0, 0.0, 0.0, 1.0};
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
+	if (withColor) {
+		float rgb[3] = {0.5, 0.5, 0.5};
+		drawRawMesh(blender_monkey_mesh, (float*) rgb);
+	} else {
+		drawRawMeshWithoutColor(blender_monkey_mesh);
+	}
+	glPopMatrix();
+}
+
+void drawRoomWalls(bool withColor) {
+	glPushMatrix();
+	/**
+	GLfloat emission[4] = {0.1, 0.1, 0.1, 1.0};
+	GLfloat ambient[4] = {0.2, 0.2, 0.0, 1.0};
+	GLfloat diffuse[4] = {0.0, 0.3, 0.0, 1.0};
+	GLfloat shininess[4] = {0.1, 0.0, 0.4, 1.0};
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
+	**/
+	if (withColor) {
+		float rgb[3] = {0.15, 0.15, 0.85};
+		drawRawMesh(room_walls_mesh, (float*) rgb);
+	} else {
+		drawRawMeshWithoutColor(room_walls_mesh);
+	}
+	glPopMatrix();
+}
+
+void drawScene(bool withColor) {
+	glPushMatrix();
+	if (withColor) {
+		drawRawMesh(scene_mesh, 0);
+	} else {
+		drawRawMeshWithoutColor(scene_mesh);
+	}
+	glPopMatrix();
+}
+
+void drawAll(bool withColor, bool separate) {
+	if (separate) {
+		drawRoomWalls(withColor);
+		drawBrotherBlender(withColor);
+		drawBlenderMonkey(withColor);
+		drawSampleMesh(true);
+	} else {
+		drawScene(withColor);
+	}
+}
+
 void drawMeshWithMode() {
 	if (_polygon_render_mode == POLYGON_MODE_FILL) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		drawMesh(surfmesh);
+		drawSampleMesh(true);
 	} else if (_polygon_render_mode == POLYGON_MODE_POINT) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
 		glPointSize(2.0);
-		drawMesh(surfmesh);
+		drawSampleMesh(true);
 	} else if (_polygon_render_mode == POLYGON_MODE_LINE) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		drawMesh(surfmesh);
+		drawSampleMesh(true);
 	} else {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		drawMesh(surfmesh);
+		drawSampleMesh(true);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glColor3f(0.0, 0.0, 0.0);
-		drawMeshWithoutColor(surfmesh);
+		drawSampleMesh(false);
 	}
 }
 
 void drawRawMeshWithMode() {
 	if (_polygon_render_mode == POLYGON_MODE_FILL) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		drawRawMesh(triangular_mesh);
+		drawAll(true, true);
 	} else if (_polygon_render_mode == POLYGON_MODE_POINT) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_POINT);
 		glPointSize(2.0);
-		drawRawMesh(triangular_mesh);
+		drawAll(true, true);
 	} else if (_polygon_render_mode == POLYGON_MODE_LINE) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		drawRawMesh(triangular_mesh);
+		drawAll(true, true);
 	} else {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		drawRawMesh(triangular_mesh);
+		drawAll(true, true);
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		glColor3f(1.0, 1.0, 1.0);
-		drawRawMeshWithoutColor(triangular_mesh);
+		drawAll(false, true);
 	}
 }
 
@@ -475,11 +602,8 @@ void displayPolygonMesh() {
 	glRotatef(-_ydiff_rotate, 1.0f, 0.0f, 0.0f);
 	glRotatef(_xdiff_rotate, 0.0f, 1.0f, 0.0f);
 
-	if (_render_raw_mesh) {
-		drawRawMeshWithMode();
-	} else {
-		drawMeshWithMode();
-	}
+	drawRawMeshWithMode();
+	drawMeshWithMode();
 	glFlush();
 	glutSwapBuffers();
 }
@@ -488,7 +612,7 @@ void myGlutInit(int argc, char *argv[]) {
 	glutInit(&argc, argv);
 	glutInitWindowPosition(50, 50);
 	glutInitWindowSize(HEIGHT, WIDTH);
-	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE);
+	glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
 	_windowID = glutCreateWindow("3D Triangle Mesh Manipulation");
 	myCreateMenu();
 	glutDisplayFunc(displayPolygonMesh);
@@ -500,13 +624,58 @@ void myGlutInit(int argc, char *argv[]) {
 	glutIdleFunc(idle);
 }
 
+void readBrotherBlender() {
+	readRawMesh("brother_blender.raw", &brother_blender_mesh);
+}
+
+void readBlenderMonkey() {
+	readRawMesh("blender_monkey.raw", &blender_monkey_mesh);
+}
+
+void readRoomWalls() {
+	readRawMesh("room_walls.raw", &room_walls_mesh);
+}
+
+void readScene() {
+	readRawMesh("all.raw", &scene_mesh);
+}
+
+void readAll() {
+	readBrotherBlender();
+	readBlenderMonkey();
+	readRoomWalls();
+	readPolygonMesh("inputmesh_sample.off");
+}
+
+void setUpLighting() {
+	glEnable(GL_LIGHTING);
+	glEnable(GL_LIGHT0);
+	GLfloat pos[4] = {5.0, 5.0, 40.0, 0.0};
+	glLightfv(GL_LIGHT0, GL_POSITION, pos);
+	GLfloat ambient[4] = {1.0, 1.0, 1.0, 1.0};
+	GLfloat diffuse[4] = {1.0, 1.0, 1.0, 1.0};
+	GLfloat specular[4] = {1.0, 1.0, 1.0, 1.0};
+	glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
+	glLightfv(GL_LIGHT0, GL_SPECULAR, specular);
+	GLfloat direction[3] = {0.0, 0.0, 0.0};
+	//glLightfv (GL_LIGHT0, GL_SPOT_DIRECTION, direction);
+
+}
+
+void setUpShading() {
+	glShadeModel(GL_FLAT);
+	glEnable(GL_NORMALIZE);
+}
+
 int main(int argc, char *argv[]) {
 	myGlutInit(argc, argv);
 	if (!glInit()) {
 		return 1;
 	}
-	readPolygonMesh("inputmesh.off");
-	readRawMesh("brother_blender_4.raw");
+	readAll();
+	setUpLighting();
+	setUpShading();
 	glutMainLoop();
 	return 0;
 }
