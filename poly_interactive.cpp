@@ -27,7 +27,9 @@
  */
 
 #ifdef _WIN32
-#include <GL/glut.h>      // (or others, depending on the system in use)
+#include <GL/glut.h>
+#pragma warning(disable:4996)
+ // (or others, depending on the system in use)
 #else
 #include <GLUT/glut.h>
 #endif
@@ -52,13 +54,36 @@ static int POLYGON_MODE_LINE = 2;
 static int POLYGON_MODE_FILL = 3;
 static int POLYGON_MODE_LINE_FILL = 4;
 static int MESH_OCTAHEDRON = 5;
-static int MESH_SAMPLE = 6;
+//static int MESH_SAMPLE = 6;
 static int OPTION_ROTATE_IDLE = 7;
-static int MESH_BROTHER_BLENDER = 8;
+//static int MESH_BROTHER_BLENDER = 8;
+
+static int MESH_BROTHER_BLENDER_BLACK = 9;
+static int MESH_BROTHER_BLENDER_WHITE = 8;
+
+static int MESH_MONKEY_BLENDER_BLACK = 10;
+static int MESH_MONKEY_BLENDER_WHITE = 11;
+
+static int MESH_SAMPLE_METAL = 6;
+static int MESH_SAMPLE_GLASS = 12;
+static int MESH_SAMPLE_FABRIC = 13;
+
+static int ATMOSPHERE_FOG = 17;
+
+static int ROOM_WALLS_STUCCO = 14;
+static int ROOM_WALLS_BRICK = 15;
+static int ROOM_WALLS_DRY_WALLS = 16;
+
+
 
 int _polygon_render_mode = POLYGON_MODE_FILL;
+int mesh_brother_color = MESH_BROTHER_BLENDER_WHITE;
+int mesh_monkey_color = MESH_MONKEY_BLENDER_BLACK;
+int mesh_sample_mat = MESH_SAMPLE_METAL;
+int atmos_mode = ATMOSPHERE_FOG;
+int walls_mode = ROOM_WALLS_STUCCO;
 int _windowID;
-
+int subOption;
 static int menu_all;
 
 static int TRANSFORM_SCALE = 1;
@@ -133,14 +158,46 @@ float _xgrid_mouse = 0.0f;
 float _ygrid_mouse = 0.0f;
 
 void myCreateMenu() {
-	menu_all = glutCreateMenu(myMenu);
+	int rendering_modes = glutCreateMenu(myMenu);
 	glutAddMenuEntry("Polygon Point Mode", POLYGON_MODE_POINT);
 	glutAddMenuEntry("Polygon Line Mode", POLYGON_MODE_LINE);
 	glutAddMenuEntry("Polygon Fill Mode", POLYGON_MODE_FILL);
 	glutAddMenuEntry("Polygon Line and Fill Mode", POLYGON_MODE_LINE_FILL);
-	glutAddMenuEntry("Brother Blender Mesh", MESH_BROTHER_BLENDER);
-	glutAddMenuEntry("Octahedron Mesh", MESH_OCTAHEDRON);
-	glutAddMenuEntry("Sample Mesh", MESH_SAMPLE);
+	
+
+	int brother_blender = glutCreateMenu(myMenu);
+	glutAddMenuEntry("White", MESH_BROTHER_BLENDER_WHITE);
+	glutAddMenuEntry("Black", MESH_BROTHER_BLENDER_BLACK);
+
+
+	int monkey_blender = glutCreateMenu(myMenu);
+	glutAddMenuEntry("White", MESH_MONKEY_BLENDER_WHITE);
+	glutAddMenuEntry("Black", MESH_MONKEY_BLENDER_BLACK);
+
+
+	int mesh_sample = glutCreateMenu(myMenu);
+	glutAddMenuEntry("Sample Mesh Metal", MESH_SAMPLE_METAL);
+	glutAddMenuEntry("Sample Mesh Glass", MESH_SAMPLE_GLASS);
+	glutAddMenuEntry("Sample Mesh FABRIC", MESH_SAMPLE_FABRIC);
+
+
+	int atmosphere = glutCreateMenu(myMenu);
+	glutAddMenuEntry("Fog", ATMOSPHERE_FOG);
+
+	int room_walls = glutCreateMenu(myMenu);
+	glutAddMenuEntry("Dry Wall", ROOM_WALLS_DRY_WALLS);
+	glutAddMenuEntry("Stucco", ROOM_WALLS_STUCCO);
+	glutAddMenuEntry("Brick", ROOM_WALLS_BRICK);
+
+	menu_all = glutCreateMenu(myMenu);
+	glutAddSubMenu("Rendering Modes", rendering_modes);
+	glutAddSubMenu("Brother Blender", brother_blender);
+	glutAddSubMenu("Monkey Blender",monkey_blender);
+	glutAddSubMenu("Mesh Sample", mesh_sample);
+	glutAddSubMenu("Atmosphere", atmosphere);
+	glutAddSubMenu("Room Walls", room_walls);
+	
+	
 	glutAddMenuEntry("Rotate While Idle", OPTION_ROTATE_IDLE);
 	glutAddMenuEntry("Exit", EXIT_APP);
 	glutAttachMenu(GLUT_RIGHT_BUTTON);
@@ -254,8 +311,8 @@ int readPolygonMesh(const char* file) {
 	char line[256];
 	FILE *fin;
 	if ((fin = fopen(file, "r")) == NULL) {
-		printf("read error...\n");
-		exit(0);
+		printf("read error... %s", &file);
+		exit(65);
 	};
 	while (fgets(line, 256, fin) != NULL) {
 		if (line[0] == 'O' && line[1] == 'F' && line[2] == 'F') /* OFF format */
@@ -291,8 +348,8 @@ int readRawMesh(const char* file, RawMesh** triangular_mesh) {
 	char line[256];
 	FILE *fin;
 	if ((fin = fopen(file, "r")) == NULL) {
-		printf("read error...\n");
-		exit(0);
+		printf("read error...%s", &file);
+		exit(65);
 	};
 	while (fgets(line, 256, fin) != NULL) {
 		if (line[0] == 'R' && line[1] == 'A' && line[2] == 'W') /* RAW format */
@@ -338,14 +395,26 @@ void myMenu(int value) {
 			free(surfmesh);
 			readPolygonMesh("inputmesh.off");
 			_render_brother_blender = false;
-		} else if (value == MESH_SAMPLE) {
+		} else if (value == MESH_SAMPLE_METAL || value == MESH_SAMPLE_GLASS || value == MESH_SAMPLE_FABRIC) {
 			free(surfmesh->face);
 			free(surfmesh->vertex);
 			free(surfmesh);
+			mesh_sample_mat = value;
 			readPolygonMesh("inputmesh_sample.off");
 			_render_brother_blender = false;
-		} else {
+		} else if (value == MESH_BROTHER_BLENDER_BLACK || value == MESH_BROTHER_BLENDER_WHITE){
 			_render_brother_blender = true;
+			mesh_brother_color = value;
+		}
+		else if (value == MESH_MONKEY_BLENDER_BLACK || value == MESH_MONKEY_BLENDER_WHITE) {
+			mesh_monkey_color = value;
+		
+		}
+		else if (value == ROOM_WALLS_BRICK || value == ROOM_WALLS_DRY_WALLS || value == ROOM_WALLS_STUCCO) {
+			walls_mode = value;
+		}
+		else if (value == ATMOSPHERE_FOG) {
+			atmos_mode = value;
 		}
 	}
 }
@@ -501,8 +570,16 @@ void drawBlenderMonkey(bool withColor) {
 	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
 	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
 	if (withColor) {
-		float rgb[3] = {0.5, 0.5, 0.5};
-		drawRawMesh(blender_monkey_mesh, (float*) rgb);
+		
+		if (mesh_monkey_color = MESH_MONKEY_BLENDER_BLACK) {
+			float rgb[3] = { 0.0, 0.0, 0.0 };
+			drawRawMesh(blender_monkey_mesh, (float*)rgb);
+		}
+		else {
+			float rgb[3] = { 0.1, 0.1, 0.1 };
+			drawRawMesh(blender_monkey_mesh, (float*)rgb);
+		}
+		
 	} else {
 		drawRawMeshWithoutColor(blender_monkey_mesh);
 	}
