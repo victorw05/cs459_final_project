@@ -39,7 +39,9 @@
  * 's' + left mouse drag = scale
  * 't' + left mouse drag = translate
  * 't' + 'z' + left mouse drag = translate z-axis
- * '0' = resent all geometric transformations
+ * '0' = reset all geometric transformations
+ * '1' (+ 'z') = translate light source 1 (spotlight facing down)
+ * '2' (+ 'z') = translate light source 0 (point light)
  *
  */
 
@@ -92,12 +94,12 @@ static int ROOM_WALLS_STUCCO = 14;
 static int ROOM_WALLS_BRICK = 15;
 static int ROOM_WALLS_DRY_WALLS = 16;
 
-static int FLAT_SHADING = 17;
+static int FLAT_SHADING = 19;
 static int SMOOTH_SHADING = 18;
 
 int _polygon_render_mode = POLYGON_MODE_FILL;
-int _mesh_brother_color = MESH_BROTHER_BLENDER_WHITE;
-int _mesh_monkey_color = MESH_MONKEY_BLENDER_BLACK;
+int _mesh_brother_color = MESH_BROTHER_BLENDER_BLACK;
+int _mesh_monkey_color = MESH_MONKEY_BLENDER_WHITE;
 int _mesh_sample_mat = MESH_SAMPLE_METAL;
 int _atmos_mode = ATMOSPHERE_FOG;
 int _walls_mode = ROOM_WALLS_STUCCO;
@@ -110,6 +112,8 @@ int subOption;
 static int TRANSFORM_SCALE = 1;
 static int TRANSFORM_TRANSLATE = 2;
 static int TRANSFORM_ROTATE = 3;
+static int TRANSFORM_LIGHT1_TRANSLATE = 4;
+static int TRANSFORM_LIGHT0_TRANSLATE = 5;
 
 int _transform_current = 0;
 int _mesh_current = 5;
@@ -121,6 +125,9 @@ int _current_width = WIDTH;
 float _current_fov = 75.0;
 
 bool _z_axis_enabled = false;
+
+float _light1_pos[4] = { 0.0, 20.0, 0.0, 1.0 };
+float _light0_pos[4] = { 5.0, 5.0, 40.0, 1.0 };
 
 typedef struct {
 	float x;
@@ -180,6 +187,10 @@ RawMesh * _brother_blender_mesh;
 RawMesh * _blender_monkey_mesh;
 RawMesh * _room_walls_mesh;
 RawMesh * _scene_mesh;
+RawMesh * _tables_mesh;
+RawMesh * _lamp_bases_mesh;
+RawMesh * _lamp_point_mesh;
+RawMesh * _lamp_spotlight_mesh;
 
 bool _fullscreen = false;
 bool _mouseDown = false;
@@ -224,12 +235,12 @@ void myCreateMenu() {
 	glutAddMenuEntry("Polygon Line and Fill Mode", POLYGON_MODE_LINE_FILL);
 
 	int brother_blender = glutCreateMenu(myMenu);
-	glutAddMenuEntry("White", MESH_BROTHER_BLENDER_WHITE);
 	glutAddMenuEntry("Black", MESH_BROTHER_BLENDER_BLACK);
+	glutAddMenuEntry("White", MESH_BROTHER_BLENDER_WHITE);
 
 	int monkey_blender = glutCreateMenu(myMenu);
 	glutAddMenuEntry("White", MESH_MONKEY_BLENDER_WHITE);
-	glutAddMenuEntry("Black", MESH_MONKEY_BLENDER_BLACK);
+	glutAddMenuEntry("Red", MESH_MONKEY_BLENDER_BLACK);
 
 	int mesh_sample = glutCreateMenu(myMenu);
 	glutAddMenuEntry("Sample Mesh Metal", MESH_SAMPLE_METAL);
@@ -240,9 +251,13 @@ void myCreateMenu() {
 	glutAddMenuEntry("Fog", ATMOSPHERE_FOG);
 
 	int room_walls = glutCreateMenu(myMenu);
-	glutAddMenuEntry("Dry Wall", ROOM_WALLS_DRY_WALLS);
 	glutAddMenuEntry("Stucco", ROOM_WALLS_STUCCO);
+	glutAddMenuEntry("Dry Wall", ROOM_WALLS_DRY_WALLS);
 	glutAddMenuEntry("Brick", ROOM_WALLS_BRICK);
+
+	int shades = glutCreateMenu(myMenu);
+	glutAddMenuEntry("Smooth", SMOOTH_SHADING);
+	glutAddMenuEntry("Flat", FLAT_SHADING);
 
 	menu_all = glutCreateMenu(myMenu);
 	glutAddSubMenu("Rendering Modes", rendering_modes);
@@ -251,6 +266,7 @@ void myCreateMenu() {
 	glutAddSubMenu("Mesh Sample", mesh_sample);
 	glutAddSubMenu("Atmosphere", atmosphere);
 	glutAddSubMenu("Room Walls", room_walls);
+	glutAddSubMenu("Shading", shades);
 
 	glutAddMenuEntry("Rotate While Idle", OPTION_ROTATE_IDLE);
 	glutAddMenuEntry("Exit", EXIT_APP);
@@ -280,8 +296,9 @@ void myResize(int w, int h) {
 
 void idle() {
 	if (!_mouseDown && _idle_rotate_current) {
-		_xdiff_rotate += 0.3f;
-		_ydiff_rotate += 0.4f;
+		_xdiff_rotate += 0.6f;
+		_ydiff_rotate += 0.5f;
+		_zdiff_rotate += 0.4f;
 	}
 	glutPostRedisplay();
 }
@@ -301,6 +318,14 @@ void keyboard(unsigned char key, int x, int y) {
 		break;
 	case 115:
 		_transform_current = TRANSFORM_SCALE;
+		_z_axis_enabled = false;
+		break;
+	case 49:
+		_transform_current = TRANSFORM_LIGHT1_TRANSLATE;
+		_z_axis_enabled = false;
+		break;
+	case 50:
+		_transform_current = TRANSFORM_LIGHT0_TRANSLATE;
 		_z_axis_enabled = false;
 		break;
 	case 122:
@@ -361,6 +386,20 @@ void mouseMotion(int x, int y) {
 		} else {
 			_xdiff_translate += (x - _xtransform);
 			_ydiff_translate += ((_current_height - y) - _ytransform);
+		}
+	} else if (_transform_current == TRANSFORM_LIGHT1_TRANSLATE) {
+		if (_z_axis_enabled) {
+			_light1_pos[2] += (-(((_current_height - y) - _ytransform)))/10.0;
+		} else {
+			_light1_pos[0] += (x - _xtransform)/10.0;
+			_light1_pos[1] += ((_current_height - y) - _ytransform)/10.0;
+		}
+	} else if (_transform_current == TRANSFORM_LIGHT0_TRANSLATE) {
+		if (_z_axis_enabled) {
+			_light0_pos[2] += (-(((_current_height - y) - _ytransform)))/10.0;
+		} else {
+			_light0_pos[0] += (x - _xtransform)/10.0;
+			_light0_pos[1] += ((_current_height - y) - _ytransform)/10.0;
 		}
 	}
 	_xtransform = x;
@@ -562,7 +601,6 @@ int readRawMesh(const char* file, RawMesh** triangular_mesh) {
 				*(*triangular_mesh)->list[n].p3,
 				&(*triangular_mesh)->list[n].normal);
 
-
 		updateNormal(&(*triangular_mesh)->list[n].p1->normal,
 				(*triangular_mesh)->list[n].normal,
 				(*triangular_mesh)->list[n].p1->connected_count);
@@ -602,6 +640,8 @@ void myMenu(int value) {
 			_walls_mode = value;
 		} else if (value == ATMOSPHERE_FOG) {
 			_atmos_mode = value;
+		} else if (value == SMOOTH_SHADING || value == FLAT_SHADING) {
+			_shading_model = value;
 		}
 	}
 }
@@ -740,13 +780,26 @@ void drawSampleMesh(bool withColor) {
 	GLfloat emission[4] = { 0.0, 0.0, 0.0, 1.0 };
 	GLfloat ambient[4] = { 0.3, 0.0, 0.0, 1.0 };
 	GLfloat diffuse[4] = { 0.0, 0.4, 0.0, 1.0 };
-	GLfloat shininess[4] = { 0.5, 0.5, 0.5, 1.0 };
+	float shine = 0.0;
+	GLfloat shininess[4] = { 0.0, 0.0, 0.0, 1.0 };
+	if (_mesh_sample_mat == MESH_SAMPLE_METAL) {
+		shininess[0] = 0.5;
+		shininess[1] = 0.5;
+		shininess[2] = 0.5;
+		shininess[3] = 1.0;
+		shine = 25.0;
+	} else if (_mesh_sample_mat == MESH_SAMPLE_GLASS) {
+		shininess[0] = diffuse[0] = 0.75;
+		shininess[1] = diffuse[1] = 0.75;
+		shininess[2] = diffuse[2] = 0.75;
+		shine = 100.0;
+	}
 	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
-	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
-	glTranslatef(-5.0, -5.0, 0.0);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, shine);
+	glTranslatef(0.3, 2.0, 0.4);
 	glScalef(0.05, 0.05, 0.05);
 	if (withColor) {
 		drawOFFMesh(_surfmesh);
@@ -759,9 +812,14 @@ void drawSampleMesh(bool withColor) {
 void drawBrotherBlender(bool withColor) {
 	glPushMatrix();
 	GLfloat emission[4] = { 0.0, 0.0, 0.0, 1.0 };
-	GLfloat ambient[4] = { 0.6, 0.3, 0.0, 1.0 };
-	GLfloat diffuse[4] = { 0.6, 0.3, 0.0, 1.0 };
-	GLfloat shininess[4] = { 0.6, 0.3, 0.0, 1.0 };
+	GLfloat ambient[4] = { 0.6, 0.33, 0.0, 1.0 };
+	GLfloat diffuse[4] = { 0.66, 0.33, 0.0, 1.0 };
+	GLfloat shininess[4] = { 0.66, 0.33, 0.0, 1.0 };
+	if (_mesh_brother_color == MESH_BROTHER_BLENDER_WHITE) {
+		ambient[0] = diffuse[0] = shininess[0] = 1.0;
+		ambient[1] = diffuse[1] = shininess[1] = 1.0;
+		ambient[2] = diffuse[2] = shininess[2] = 1.0;
+	}
 	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
@@ -779,14 +837,14 @@ void drawBrotherBlender(bool withColor) {
 void drawBlenderMonkey(bool withColor) {
 	glPushMatrix();
 	GLfloat emission[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat ambient[4] = { 0.3, 0.3, 0.3, 1.0 };
+	GLfloat diffuse[4] = { 0.3, 0.3, 0.3, 1.0 };
+	GLfloat shininess[4] = { 0.3, 0.3, 0.3, 1.0 };
 	if (_mesh_monkey_color == MESH_MONKEY_BLENDER_BLACK) {
-		emission[0] = 0.0;
-		emission[1] = 0.0;
-		emission[2] = 0.0;
+		ambient[0] = diffuse[0] = shininess[0] = 0.66;
+		ambient[1] = diffuse[1] = shininess[1] = 0.1;
+		ambient[2] = diffuse[2] = shininess[2] = 0.1;
 	}
-	GLfloat ambient[4] = { 0.2, 0.2, 0.2, 1.0 };
-	GLfloat diffuse[4] = { 0.2, 0.2, 0.2, 1.0 };
-	GLfloat shininess[4] = { 0.2, 0.2, 0.2, 1.0 };
 	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
@@ -808,6 +866,41 @@ void drawRoomWalls(bool withColor) {
 	GLfloat ambient[4] = { 0.2, 0.2, 0.0, 1.0 };
 	GLfloat diffuse[4] = { 0.0, 0.3, 0.0, 1.0 };
 	GLfloat shininess[4] = { 0.1, 0.0, 0.4, 1.0 };
+	float shine = 10.0;
+	if (_walls_mode == ROOM_WALLS_DRY_WALLS) {
+		shininess[0] = shininess[1] = shininess[2]  = 0.0;
+		ambient[0] = diffuse[0] = 0.4;
+		ambient[1] = diffuse[1] = 0.4;
+		ambient[2] = diffuse[2] = 0.4;
+		shine = 0.0;
+	} else if (_walls_mode == ROOM_WALLS_BRICK) {
+		ambient[0] = diffuse[0] = shininess[0] = 0.4;
+		ambient[1] = diffuse[1] = shininess[1] = 0.2;
+		ambient[2] = diffuse[2] = shininess[2] = 0.0;
+		shine = 20.0;
+	}
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, shine);
+
+	if (withColor) {
+		float rgb[3] = { 0.15, 0.15, 0.85 };
+		drawRawMesh(_room_walls_mesh, (float*) rgb);
+	} else {
+		drawRawMeshWithoutColor(_room_walls_mesh);
+	}
+	glPopMatrix();
+}
+
+void drawTables(bool withColor) {
+	glPushMatrix();
+
+	GLfloat emission[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat ambient[4] = { 0.2, 0.1, 0.0, 1.0 };
+	GLfloat diffuse[4] = { 0.2, 0.1, 0.0, 1.0 };
+	GLfloat shininess[4] = { 0.2, 0.1, 0.0, 1.0 };
 	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
@@ -816,9 +909,75 @@ void drawRoomWalls(bool withColor) {
 
 	if (withColor) {
 		float rgb[3] = { 0.15, 0.15, 0.85 };
-		drawRawMesh(_room_walls_mesh, (float*) rgb);
+		drawRawMesh(_tables_mesh, (float*) rgb);
 	} else {
-		drawRawMeshWithoutColor(_room_walls_mesh);
+		drawRawMeshWithoutColor(_tables_mesh);
+	}
+	glPopMatrix();
+}
+
+void drawLampBases(bool withColor) {
+	glPushMatrix();
+
+	GLfloat emission[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat diffuse[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat shininess[4] = { 0.0, 0.0, 0.0, 1.0 };
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
+
+	if (withColor) {
+		float rgb[3] = { 0.15, 0.15, 0.85 };
+		drawRawMesh(_lamp_bases_mesh, (float*) rgb);
+	} else {
+		drawRawMeshWithoutColor(_lamp_bases_mesh);
+	}
+	glPopMatrix();
+}
+
+void drawLampPoint(bool withColor) {
+	glPushMatrix();
+
+	GLfloat emission[4] = { 1.0, 1.0, 1.0, 1.0 };
+	GLfloat ambient[4] = { 1.0, 1.0, 1.0, 1.0 };
+	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
+	GLfloat shininess[4] = { 1.0, 1.0, 1.0, 1.0 };
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
+
+	if (withColor) {
+		float rgb[3] = { 0.15, 0.15, 0.85 };
+		drawRawMesh(_lamp_point_mesh, (float*) rgb);
+	} else {
+		drawRawMeshWithoutColor(_lamp_point_mesh);
+	}
+	glPopMatrix();
+}
+
+void drawLampSpotlight(bool withColor) {
+	glPushMatrix();
+
+	GLfloat emission[4] = { 0.0, 0.0, 1.0, 1.0 };
+	GLfloat ambient[4] = { 0.0, 0.0, 1.0, 1.0 };
+	GLfloat diffuse[4] = { 0.0, 0.0, 1.0, 1.0 };
+	GLfloat shininess[4] = { 0.0, 0.0, 1.0, 1.0 };
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
+
+	if (withColor) {
+		float rgb[3] = { 0.15, 0.15, 0.85 };
+		drawRawMesh(_lamp_spotlight_mesh, (float*) rgb);
+	} else {
+		drawRawMeshWithoutColor(_lamp_spotlight_mesh);
 	}
 	glPopMatrix();
 }
@@ -833,6 +992,34 @@ void drawScene(bool withColor) {
 	glPopMatrix();
 }
 
+void setUpSpotlight() {
+	glEnable(GL_LIGHT2);
+	GLfloat pos[4] = { -1.2, -5.8, 0.2, 1.0 };
+	glLightfv(GL_LIGHT2, GL_POSITION, pos);
+	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
+	GLfloat specular[4] = { 1.0, 1.0, 1.0, 1.0 };
+	glLightfv(GL_LIGHT2, GL_AMBIENT, ambient);
+	glLightfv(GL_LIGHT2, GL_DIFFUSE, diffuse);
+	glLightfv(GL_LIGHT2, GL_SPECULAR, specular);
+	GLfloat direction[3] = { -2.0, 1.0, -0.1 };
+	glLightfv(GL_LIGHT2, GL_SPOT_DIRECTION, direction);
+	glLightf(GL_LIGHT2, GL_SPOT_CUTOFF, 40.0);
+	glLightf(GL_LIGHT2, GL_SPOT_EXPONENT, 0.0);
+}
+
+void setUpPointlight() {
+	glEnable(GL_LIGHT3);
+	GLfloat pos[4] = { 2.1, -6.2, 0.2, 1.0 };
+	glLightfv(GL_LIGHT3, GL_POSITION, pos);
+	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
+	GLfloat specular[4] = { 1.0, 1.0, 1.0, 1.0 };
+	glLightfv(GL_LIGHT3, GL_AMBIENT, ambient);
+	glLightfv(GL_LIGHT3, GL_DIFFUSE, diffuse);
+	glLightfv(GL_LIGHT3, GL_SPECULAR, specular);
+}
+
 void drawAll(bool withColor, bool separate) {
 	if (separate) {
 		glPushMatrix();
@@ -841,7 +1028,13 @@ void drawAll(bool withColor, bool separate) {
 		drawRoomWalls(withColor);
 		drawBrotherBlender(withColor);
 		drawBlenderMonkey(withColor);
+		drawTables(withColor);
+		drawLampBases(withColor);
+		drawLampPoint(withColor);
+		drawLampSpotlight(withColor);
 		drawSampleMesh(true);
+		//setUpSpotlight();
+		//setUpPointlight();
 		glPopMatrix();
 	} else {
 		drawScene(withColor);
@@ -883,14 +1076,30 @@ void drawLightSource1() {
 	glPushMatrix();
 	GLfloat emission[4] = { 1.0, 1.0, 1.0, 1.0 };
 	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
-	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
+	GLfloat diffuse[4] = { 0.0, 0.0, 0.0, 1.0 };
 	GLfloat shininess[4] = { 0.0, 0.0, 0.0, 1.0 };
 	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
 	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
-	glTranslatef(0.0, 20.0, 0.0);
+	glTranslatef(_light1_pos[0], _light1_pos[1], _light1_pos[2]);
+	glutSolidSphere(1, 10, 10);
+	glPopMatrix();
+}
+
+void drawLightSource0() {
+	glPushMatrix();
+	GLfloat emission[4] = { 0.0, 1.0, 1.0, 1.0 };
+	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat diffuse[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat shininess[4] = { 0.0, 0.0, 0.0, 1.0 };
+	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
+	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
+	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 25.0);
+	glTranslatef(_light0_pos[0], _light0_pos[1], _light0_pos[2]);
 	glutSolidSphere(1, 10, 10);
 	glPopMatrix();
 }
@@ -906,7 +1115,7 @@ void drawOrigin() {
 	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, shininess);
 	glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, 0.0);
-	glutSolidSphere(1, 10, 10);
+	glutSolidSphere(0.5, 10, 10);
 	glPopMatrix();
 }
 
@@ -922,11 +1131,50 @@ void drawObjects() {
 	glPopMatrix();
 }
 
+void setUpLight1() {
+	glEnable(GL_LIGHT1);
+	glLightfv(GL_LIGHT1, GL_POSITION, _light1_pos);
+	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
+	GLfloat specular[4] = { 1.0, 1.0, 1.0, 1.0 };
+	glLightfv(GL_LIGHT1, GL_AMBIENT, ambient);
+	glLightfv(GL_LIGHT1, GL_DIFFUSE, diffuse);
+	glLightfv(GL_LIGHT1, GL_SPECULAR, specular);
+	GLfloat direction[3] = { 0.0, -1.0, 0.0 };
+	glLightfv(GL_LIGHT1, GL_SPOT_DIRECTION, direction);
+	glLightf(GL_LIGHT1, GL_SPOT_CUTOFF, 80.0);
+	glLightf(GL_LIGHT1, GL_SPOT_EXPONENT, 0.0);
+}
+
+void setUpLight0() {
+	glEnable(GL_LIGHT0);
+	glLightfv(GL_LIGHT0, GL_POSITION, _light0_pos);
+	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
+	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
+	GLfloat specular[4] = { 1.0, 1.0, 1.0, 1.0 };
+	glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
+	glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
+	glLightfv(GL_LIGHT0, GL_SPECULAR, specular);
+}
+
+void setUpShading() {
+	if (_shading_model == FLAT_SHADING) {
+		glShadeModel(GL_FLAT);
+	} else if (_shading_model == SMOOTH_SHADING) {
+		glShadeModel(GL_SMOOTH);
+	}
+	glEnable(GL_NORMALIZE);
+}
+
 void display() {
 	setUpDisplay();
+	setUpShading();
 	drawObjects();
 	drawOrigin();
+	drawLightSource0();
 	drawLightSource1();
+	setUpLight0();
+	setUpLight1();
 	cleanUpDisplay();
 }
 
@@ -962,10 +1210,30 @@ void readScene() {
 	readRawMesh("all.raw", &_scene_mesh);
 }
 
+void readTables() {
+	readRawMesh("tables.raw", &_tables_mesh);
+}
+
+void readLampBases() {
+	readRawMesh("lamp_bases.raw", &_lamp_bases_mesh);
+}
+
+void readLampPoint() {
+	readRawMesh("lamp_point.raw", &_lamp_point_mesh);
+}
+
+void readLampSpotlight() {
+	readRawMesh("lamp_spotlight.raw", &_lamp_spotlight_mesh);
+}
+
 void readAll() {
 	readBrotherBlender();
 	readBlenderMonkey();
 	readRoomWalls();
+	readTables();
+	readLampBases();
+	readLampPoint();
+	readLampSpotlight();
 	readOFFMesh("inputmesh_sample.off");
 }
 
@@ -976,51 +1244,10 @@ void setUpFog() {
 	glFogi(GL_FOG_MODE, GL_EXP);
 }
 
-void setUpLight0() {
-	glEnable(GL_LIGHT0);
-	GLfloat pos[4] = { 5.0, 5.0, 40.0, 0.0 };
-	glLightfv(GL_LIGHT0, GL_POSITION, pos);
-	GLfloat ambient[4] = { 1.0, 1.0, 1.0, 1.0 };
-	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
-	GLfloat specular[4] = { 1.0, 1.0, 1.0, 1.0 };
-	glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
-	glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
-	glLightfv(GL_LIGHT0, GL_SPECULAR, specular);
-	//GLfloat direction[3] = {0.0, 0.0, 0.0};
-	//glLightfv (GL_LIGHT0, GL_SPOT_DIRECTION, direction);
-}
-
-void setUpLight1() {
-	glEnable(GL_LIGHT1);
-	GLfloat pos[4] = { 0.0, 10.0, -60.0, 1.0 };
-	glLightfv(GL_LIGHT1, GL_POSITION, pos);
-	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
-	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
-	GLfloat specular[4] = { 1.0, 1.0, 1.0, 1.0 };
-	glLightfv(GL_LIGHT1, GL_AMBIENT, ambient);
-	glLightfv(GL_LIGHT1, GL_DIFFUSE, diffuse);
-	glLightfv(GL_LIGHT1, GL_SPECULAR, specular);
-	GLfloat direction[3] = { 0.0, -1.0, 0.0 };
-	glLightfv(GL_LIGHT1, GL_SPOT_DIRECTION, direction);
-	glLightf(GL_LIGHT1, GL_SPOT_CUTOFF, 80.0);
-	glLightf(GL_LIGHT1, GL_SPOT_EXPONENT, 0.0);
-}
-
 void setUpLighting() {
 	glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, GL_TRUE);
 	glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE);
 	glEnable(GL_LIGHTING);
-	setUpLight0();
-	setUpLight1();
-}
-
-void setUpShading() {
-	if (_shading_model == FLAT_SHADING) {
-		glShadeModel(GL_FLAT);
-	} else if (_shading_model == SMOOTH_SHADING) {
-		glShadeModel(GL_SMOOTH);
-	}
-	glEnable(GL_NORMALIZE);
 }
 
 int main(int argc, char *argv[]) {
@@ -1030,7 +1257,6 @@ int main(int argc, char *argv[]) {
 	}
 	readAll();
 	setUpLighting();
-	setUpShading();
 	glutMainLoop();
 	return 0;
 }
