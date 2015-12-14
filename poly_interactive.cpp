@@ -13,25 +13,41 @@
  * 		c) As Fill
  * 		d) As Lines and Fill
  * 2) Brother Blender
- * 		a) black
- * 		b) white
+ * 		a) Black
+ * 		b) White
  * 3) Monkey Blender
- * 		a) black
- * 		b) white
+ * 		a) White
+ * 		b) Read
  * 4) Mesh Sample
- * 		a) metal
- * 		b) glass
- * 		c) fabric
- * 5) Atmosphere
- * 		a) fog
- * 6) Room Walls
- * 		a) dry wall
- * 		b) stucco
- * 		c) brick
- * 7) Rotate the Polygon While Idle
- * 7) Exit
+ * 		a) Metal
+ * 		b) Glass
+ * 		c) Fabric
+ * 5) Room Walls
+ * 		a) Stucco
+ * 		b) Dry Wall
+ * 		c) Brick
+ * 6) Shading
+ * 		a) Smooth
+ * 		b) Flat
+ * 7) Lamp
+ * 		a) ON
+ * 		b) OFF
+ * 8) Spotlight
+ * 		a) ON
+ * 		b) OFF
+ * 9) Upper Light
+ * 		a) White
+ * 		b) Orange
+ * 10) Front Light
+ * 		a) White
+ * 		b) Turquoise
+ * 11) Origin
+ * 		a) Hidden
+ * 		b) Invisible
+ * 12) Rotate While Idle
+ * 13) Exit
  *
- * Expected Mesh Files: inputmesh.off & inputmesh_sample.off
+ * Expected Mesh Files: inputmesh_sample.off,
  *
  * 3D Geometric Transformations:
  * 'r' + left mouse drag = rotate
@@ -40,8 +56,8 @@
  * 't' + left mouse drag = translate
  * 't' + 'z' + left mouse drag = translate z-axis
  * '0' = reset all geometric transformations
- * '1' (+ 'z') = translate light source 1 (spotlight facing down)
- * '2' (+ 'z') = translate light source 0 (point light)
+ * '1' (+ 'z') + left mouse drag = translate upper light (spotlight facing down)
+ * '2' (+ 'z') + left mouse drag = translate front light (point light)
  *
  */
 
@@ -88,8 +104,6 @@ static int MESH_SAMPLE_METAL = 6;
 static int MESH_SAMPLE_GLASS = 12;
 static int MESH_SAMPLE_FABRIC = 13;
 
-static int ATMOSPHERE_FOG = 17;
-
 static int ROOM_WALLS_STUCCO = 14;
 static int ROOM_WALLS_BRICK = 15;
 static int ROOM_WALLS_DRY_WALLS = 16;
@@ -97,14 +111,33 @@ static int ROOM_WALLS_DRY_WALLS = 16;
 static int FLAT_SHADING = 19;
 static int SMOOTH_SHADING = 18;
 
+static int POINT_LIGHT_ON = 20;
+static int POINT_LIGHT_OFF = 21;
+
+static int SPOT_LIGHT_ON = 22;
+static int SPOT_LIGHT_OFF = 23;
+
+static int UPPER_LIGHT_WHITE = 24;
+static int UPPER_LIGHT_ORANGE = 25;
+
+static int FRONT_LIGHT_WHITE = 26;
+static int FRONT_LIGHT_TURQUOISE = 27;
+
+static int ORIGIN_VISIBLE = 28;
+static int ORIGIN_HIDDEN = 29;
+
 int _polygon_render_mode = POLYGON_MODE_FILL;
 int _mesh_brother_color = MESH_BROTHER_BLENDER_BLACK;
 int _mesh_monkey_color = MESH_MONKEY_BLENDER_WHITE;
 int _mesh_sample_mat = MESH_SAMPLE_METAL;
-int _atmos_mode = ATMOSPHERE_FOG;
 int _walls_mode = ROOM_WALLS_STUCCO;
 int _windowID;
 int _shading_model = SMOOTH_SHADING;
+int _pointLightState = POINT_LIGHT_ON;
+int _spotLightState = SPOT_LIGHT_ON;
+int _upper_light_color = UPPER_LIGHT_WHITE;
+int _front_light_color = FRONT_LIGHT_WHITE;
+int _origin_visibility = ORIGIN_HIDDEN;
 
 static int menu_all;
 int subOption;
@@ -243,12 +276,9 @@ void myCreateMenu() {
 	glutAddMenuEntry("Red", MESH_MONKEY_BLENDER_BLACK);
 
 	int mesh_sample = glutCreateMenu(myMenu);
-	glutAddMenuEntry("Sample Mesh Metal", MESH_SAMPLE_METAL);
-	glutAddMenuEntry("Sample Mesh Glass", MESH_SAMPLE_GLASS);
-	glutAddMenuEntry("Sample Mesh FABRIC", MESH_SAMPLE_FABRIC);
-
-	int atmosphere = glutCreateMenu(myMenu);
-	glutAddMenuEntry("Fog", ATMOSPHERE_FOG);
+	glutAddMenuEntry("Metal", MESH_SAMPLE_METAL);
+	glutAddMenuEntry("Glass", MESH_SAMPLE_GLASS);
+	glutAddMenuEntry("Fabric", MESH_SAMPLE_FABRIC);
 
 	int room_walls = glutCreateMenu(myMenu);
 	glutAddMenuEntry("Stucco", ROOM_WALLS_STUCCO);
@@ -259,14 +289,38 @@ void myCreateMenu() {
 	glutAddMenuEntry("Smooth", SMOOTH_SHADING);
 	glutAddMenuEntry("Flat", FLAT_SHADING);
 
+	int pointLight = glutCreateMenu(myMenu);
+	glutAddMenuEntry("ON", POINT_LIGHT_ON);
+	glutAddMenuEntry("OFF", POINT_LIGHT_OFF);
+
+	int spotLight = glutCreateMenu(myMenu);
+	glutAddMenuEntry("ON", SPOT_LIGHT_ON);
+	glutAddMenuEntry("OFF", SPOT_LIGHT_OFF);
+
+	int upperLight = glutCreateMenu(myMenu);
+	glutAddMenuEntry("White", UPPER_LIGHT_WHITE);
+	glutAddMenuEntry("Orange", UPPER_LIGHT_ORANGE);
+
+	int frontLight = glutCreateMenu(myMenu);
+	glutAddMenuEntry("White", FRONT_LIGHT_WHITE);
+	glutAddMenuEntry("Turquoise", FRONT_LIGHT_TURQUOISE);
+
+	int origin = glutCreateMenu(myMenu);
+	glutAddMenuEntry("Hidden", ORIGIN_HIDDEN);
+	glutAddMenuEntry("Visible", ORIGIN_VISIBLE);
+
 	menu_all = glutCreateMenu(myMenu);
 	glutAddSubMenu("Rendering Modes", rendering_modes);
 	glutAddSubMenu("Brother Blender", brother_blender);
 	glutAddSubMenu("Monkey Blender", monkey_blender);
 	glutAddSubMenu("Mesh Sample", mesh_sample);
-	glutAddSubMenu("Atmosphere", atmosphere);
 	glutAddSubMenu("Room Walls", room_walls);
 	glutAddSubMenu("Shading", shades);
+	glutAddSubMenu("Lamp", pointLight);
+	glutAddSubMenu("Spotlight", spotLight);
+	glutAddSubMenu("Upper Light", upperLight);
+	glutAddSubMenu("Front Light", frontLight);
+	glutAddSubMenu("Origin", origin);
 
 	glutAddMenuEntry("Rotate While Idle", OPTION_ROTATE_IDLE);
 	glutAddMenuEntry("Exit", EXIT_APP);
@@ -638,10 +692,18 @@ void myMenu(int value) {
 		} else if (value == ROOM_WALLS_BRICK || value == ROOM_WALLS_DRY_WALLS
 				|| value == ROOM_WALLS_STUCCO) {
 			_walls_mode = value;
-		} else if (value == ATMOSPHERE_FOG) {
-			_atmos_mode = value;
 		} else if (value == SMOOTH_SHADING || value == FLAT_SHADING) {
 			_shading_model = value;
+		} else if (value == POINT_LIGHT_ON || value == POINT_LIGHT_OFF) {
+			_pointLightState = value;
+		} else if (value == SPOT_LIGHT_ON || value == SPOT_LIGHT_OFF) {
+			_spotLightState = value;
+		} else if (value == UPPER_LIGHT_WHITE || value == UPPER_LIGHT_ORANGE) {
+			_upper_light_color = value;
+		} else if (value == FRONT_LIGHT_WHITE || value == FRONT_LIGHT_TURQUOISE) {
+			_front_light_color = value;
+		} else if (value == ORIGIN_HIDDEN || value == ORIGIN_VISIBLE) {
+			_origin_visibility = value;
 		}
 	}
 }
@@ -1033,8 +1095,16 @@ void drawAll(bool withColor, bool separate) {
 		drawLampPoint(withColor);
 		drawLampSpotlight(withColor);
 		drawSampleMesh(true);
-		//setUpSpotlight();
-		//setUpPointlight();
+		if (_spotLightState == SPOT_LIGHT_ON) {
+			setUpSpotlight();
+		} else {
+			glDisable(GL_LIGHT2);
+		}
+		if (_pointLightState == POINT_LIGHT_ON) {
+			setUpPointlight();
+		} else {
+			glDisable(GL_LIGHT3);
+		}
 		glPopMatrix();
 	} else {
 		drawScene(withColor);
@@ -1078,6 +1148,11 @@ void drawLightSource1() {
 	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
 	GLfloat diffuse[4] = { 0.0, 0.0, 0.0, 1.0 };
 	GLfloat shininess[4] = { 0.0, 0.0, 0.0, 1.0 };
+	if (_upper_light_color == UPPER_LIGHT_ORANGE) {
+		emission[0] = 1.0;
+		emission[1] = 0.5;
+		emission[2] = 0.0;
+	}
 	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
@@ -1090,10 +1165,15 @@ void drawLightSource1() {
 
 void drawLightSource0() {
 	glPushMatrix();
-	GLfloat emission[4] = { 0.0, 1.0, 1.0, 1.0 };
+	GLfloat emission[4] = { 1.0, 1.0, 1.0, 1.0 };
 	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
 	GLfloat diffuse[4] = { 0.0, 0.0, 0.0, 1.0 };
 	GLfloat shininess[4] = { 0.0, 0.0, 0.0, 1.0 };
+	if (_front_light_color == FRONT_LIGHT_TURQUOISE) {
+			emission[0] = 0.0;
+			emission[1] = 1.0;
+			emission[2] = 1.0;
+	}
 	glMaterialfv(GL_FRONT_AND_BACK, GL_EMISSION, emission);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, ambient);
 	glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, diffuse);
@@ -1105,6 +1185,9 @@ void drawLightSource0() {
 }
 
 void drawOrigin() {
+	if (_origin_visibility == ORIGIN_HIDDEN) {
+		return;
+	}
 	glPushMatrix();
 	GLfloat emission[4] = { 1.0, 0.8, 0.0, 1.0 };
 	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
@@ -1137,6 +1220,11 @@ void setUpLight1() {
 	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
 	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
 	GLfloat specular[4] = { 1.0, 1.0, 1.0, 1.0 };
+	if (_upper_light_color == UPPER_LIGHT_ORANGE) {
+		diffuse[0] = specular[0] = 1.0;
+		diffuse[1] = specular[1] = 0.5;
+		diffuse[2] = specular[2] = 0.0;
+	}
 	glLightfv(GL_LIGHT1, GL_AMBIENT, ambient);
 	glLightfv(GL_LIGHT1, GL_DIFFUSE, diffuse);
 	glLightfv(GL_LIGHT1, GL_SPECULAR, specular);
@@ -1152,6 +1240,11 @@ void setUpLight0() {
 	GLfloat ambient[4] = { 0.0, 0.0, 0.0, 1.0 };
 	GLfloat diffuse[4] = { 1.0, 1.0, 1.0, 1.0 };
 	GLfloat specular[4] = { 1.0, 1.0, 1.0, 1.0 };
+	if (_front_light_color == FRONT_LIGHT_TURQUOISE) {
+			diffuse[0] = specular[0] = 0.0;
+			diffuse[1] = specular[1] = 1.0;
+			diffuse[2] = specular[2] = 1.0;
+		}
 	glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
 	glLightfv(GL_LIGHT0, GL_DIFFUSE, diffuse);
 	glLightfv(GL_LIGHT0, GL_SPECULAR, specular);
@@ -1235,13 +1328,6 @@ void readAll() {
 	readLampPoint();
 	readLampSpotlight();
 	readOFFMesh("inputmesh_sample.off");
-}
-
-void setUpFog() {
-	glEnable(GL_FOG);
-	GLfloat atmoColor[4] = { 0.66f, 0.66f, 0.66f, 0.66f };
-	glFogfv(GL_FOG_COLOR, atmoColor);
-	glFogi(GL_FOG_MODE, GL_EXP);
 }
 
 void setUpLighting() {
